@@ -1,0 +1,4 @@
+version.path = "src/woid/version.py"
+
+[build.targets.sdist]
+packages = ["/src/woid"]
