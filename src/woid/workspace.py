@@ -8,6 +8,7 @@ from msgspec.json import decode as decode_json
 from woid import log
 from woid.help import ErrorStrings, HelpStrings
 from woid.log import json_dumps
+from woid.version import __version__
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -115,12 +116,14 @@ def load_workspace(path: Path) -> Workspace:
         log.fatal("Failed to parse workspace JSON.", path=path, error=e)
 
     if woid_version := json.get("woid-version"):
+        woid_version = str(woid_version)
         try:
             version_major, version_minor = woid_version.split(".")
         except ValueError:
             log.fatal("Failed to parse workspace version; expected `MAJOR.MINOR` (e.g. `0.1`).", version=woid_version)
     else:
-        log.fatal("Workspace JSON is missing 'woid-version' field.", json=json)
+        log.inf("Workspace JSON is missing 'woid-version' field; assuming latest version.")
+        version_major, version_minor = __version__.split(".")
 
     if name := json.get("name"):
         name = str(name)
@@ -128,7 +131,7 @@ def load_workspace(path: Path) -> Workspace:
         log.fatal("Workspace JSON is missing 'name' field.", workspace=path)
 
     ws = Workspace(
-        _woid_version=Version(version_major, version_minor),
+        _woid_version=Version(int(version_major), int(version_minor)),
         name=name,
         root_dir=path.parent,
         hosts={},
@@ -139,7 +142,7 @@ def load_workspace(path: Path) -> Workspace:
         for host_name, host_json in hosts.items():
             ws.hosts[host_name] = Host(name=host_name, json=host_json)
     else:
-        log.fatal("Workspace JSON is missing 'hosts' field.", workspace=path)
+        log.fatal("Workspace JSON is missing 'hosts' field.", workspace=path, erroneus_json=json_dumps("root", json))
 
     if projects := json.get("projects"):
         for project_name, project_json in projects.items():

@@ -1,7 +1,7 @@
 [project]
 name = "woid"
 dynamic = ["version"]
-description = "Meta-tool for project management."
+description = "Tool for managing multi-project workspaces."
 authors = [{ name = "Jaagup Averin", email = "jaagup.averin@gmail.com" }]
 readme = "README.md"
 license = { text = "LICENSE.md" }

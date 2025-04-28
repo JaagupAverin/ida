@@ -9,7 +9,7 @@ from woid import log
 from woid.workspace import load_workspace
 
 APP_NAME = "woid"
-WORKSPACE_JSON_PATH = Path("workspace.json")
+WORKSPACE_JSON_PATH = Path("woid.json")
 
 app: typer.Typer = typer.Typer(name=APP_NAME, rich_markup_mode="rich")
 
