@@ -6,9 +6,8 @@ from typing import TYPE_CHECKING, Any, override
 from msgspec.json import decode as decode_json
 
 from woid import log
-from woid.help import ErrorStrings, HelpStrings
-from woid.log import json_dumps
-from woid.version import __version__
+from woid.common import WS_JSON_PATH
+from woid.help import ErrorStrings, Help
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -21,15 +20,18 @@ class Host:
 
     def __init__(self, name: str, json: dict[str, Any]) -> None:
         self.name = name
-        if url := json.get("url"):
+        if url := json.pop("url", None):
             self.url = str(url)
         else:
             log.fatal(
                 ErrorStrings.INVALID_WORKSPACE_JSON,
                 issue=f"Host '{self.name}' does not define the required field 'url'.",
-                erroneus_json=json_dumps(self.name, json),
-                help=HelpStrings.JsonFields.HOST_URL,
+                erroneous_json={self.name: json},
+                help=Help.JsonFields.host_url(),
             )
+
+        if len(json) != 0:
+            log.wrn(f"Host '{self.name}' has extraneous fields: {list(json.keys())}")
 
     @override
     def __repr__(self) -> str:
@@ -46,7 +48,7 @@ class Project:
     def __init__(self, name: str, json: dict[str, Any], ws: Workspace) -> None:
         self.name = name
 
-        if host_name := json.get("host"):
+        if host_name := json.pop("host", None):
             if host := ws.hosts.get(host_name):
                 self.host = host
                 self.absolute_host_path = host.url + "/" + str(host_name)
@@ -55,18 +57,18 @@ class Project:
                     ErrorStrings.INVALID_WORKSPACE_JSON,
                     issue=(
                         f"Project '{self.name}' references the host '{host_name}', "
-                        + "which has not been defined in workspace.json."
+                        + f"which has not been defined in '{WS_JSON_PATH}'."
                     ),
                     valid_hosts=list(ws.hosts.keys()),
-                    erroneus_json=json_dumps(self.name, json),
-                    help=HelpStrings.JsonFields.PROJECT_HOST,
+                    erroneous_json={self.name: json},
+                    help=Help.JsonFields.project_host(),
                 )
         else:
             log.fatal(
                 ErrorStrings.INVALID_WORKSPACE_JSON,
                 issue=f"Project '{self.name}' does not define the required field 'host'.",
-                erroneus_json=json_dumps(self.name, json),
-                help=HelpStrings.JsonFields.PROJECT_HOST,
+                erroneous_json={self.name: json},
+                help=Help.JsonFields.project_host(),
             )
 
         self.absolute_local_path = ws.root_dir / self.name
@@ -85,73 +87,86 @@ class Version:
 @dataclass
 class Workspace:
     _woid_version: Version
-    name: str
     root_dir: Path
     hosts: dict[str, Host]
     projects: dict[str, Project]
 
     @override
     def __repr__(self) -> str:
-        return f"Workspace({self.name}, {len(self.hosts)} hosts, {len(self.projects)} projects)"
+        return f"Workspace({self.root_dir}, {len(self.hosts)} hosts, {len(self.projects)} projects)"
 
     def dump(self) -> dict[str, Any]:
         return {
             "woid-version": f"{self._woid_version.major}.{self._woid_version.minor}",
-            "name": self.name,
             "root-dir": str(self.root_dir),
             "hosts": self.hosts,
             "projects": self.projects,
         }
 
 
-def load_workspace(path: Path) -> Workspace:
-    try:
-        text = path.read_text()
-    except Exception as e:  # noqa: BLE001
-        log.fatal("Failed to read workspace JSON.", path=path, error=e)
-
-    try:
-        json = decode_json(text)
-    except Exception as e:  # noqa: BLE001
-        log.fatal("Failed to parse workspace JSON.", path=path, error=e)
-
-    if woid_version := json.get("woid-version"):
+def _parse_workspace_version(json: dict[str, Any]) -> Version:
+    if woid_version := json.get("version"):
         woid_version = str(woid_version)
         try:
             version_major, version_minor = woid_version.split(".")
         except ValueError:
-            log.fatal("Failed to parse workspace version; expected `MAJOR.MINOR` (e.g. `0.1`).", version=woid_version)
+            log.fatal(
+                ErrorStrings.INVALID_WORKSPACE_JSON,
+                issue="Workspace version does not follow the format <MAJOR>.<MINOR> (e.g. '0.1').",
+                erroneous_value=woid_version,
+            )
     else:
-        log.inf("Workspace JSON is missing 'woid-version' field; assuming latest version.")
-        version_major, version_minor = __version__.split(".")
+        log.fatal(
+            ErrorStrings.INVALID_WORKSPACE_JSON,
+            issue="Workspace does not define the required field 'version'.",
+            erroneous_json=json,
+        )
+    return Version(int(version_major), int(version_minor))
 
-    if name := json.get("name"):
-        name = str(name)
-    else:
-        log.fatal("Workspace JSON is missing 'name' field.", workspace=path)
 
-    ws = Workspace(
-        _woid_version=Version(int(version_major), int(version_minor)),
-        name=name,
-        root_dir=path.parent,
-        hosts={},
-        projects={},
-    )
-
+def _parse_workspace_hosts(json: dict[str, Any], ws: Workspace) -> None:
     if hosts := json.get("hosts"):
         for host_name, host_json in hosts.items():
             ws.hosts[host_name] = Host(name=host_name, json=host_json)
     else:
-        log.fatal("Workspace JSON is missing 'hosts' field.", workspace=path, erroneus_json=json_dumps("root", json))
+        log.fatal(
+            ErrorStrings.INVALID_WORKSPACE_JSON,
+            issue="Workspace does not define the required field 'hosts'.",
+            erroneous_json=json,
+        )
 
+
+def _parse_workspace_projects(json: dict[str, Any], ws: Workspace) -> None:
     if projects := json.get("projects"):
         for project_name, project_json in projects.items():
             ws.projects[project_name] = Project(name=project_name, json=project_json, ws=ws)
     else:
-        log.fatal("Workspace JSON is missing 'projects' field.", workspace=path)
+        log.fatal(
+            ErrorStrings.INVALID_WORKSPACE_JSON,
+            issue="Workspace does not define the required field 'projects'.",
+            erroneous_json=json,
+        )
 
-    log.inf("Workspace JSON parsed.", workspace=ws.dump())
+
+def load_workspace(path: Path) -> Workspace:
+    try:
+        text: str = path.read_text()
+    except Exception as e:  # noqa: BLE001
+        log.fatal(f"Failed to read '{WS_JSON_PATH}'.", path=path.absolute(), error=e)
+
+    try:
+        json: dict[str, Any] = decode_json(text)
+    except Exception as e:  # noqa: BLE001
+        log.fatal(f"Failed to decode '{WS_JSON_PATH}'.", path=path.absolute(), error=e, dump=text)
+
+    version: Version = _parse_workspace_version(json)
+    ws: Workspace = Workspace(
+        _woid_version=version,
+        root_dir=path.parent,
+        hosts={},
+        projects={},
+    )
+    _parse_workspace_hosts(json, ws)
+    _parse_workspace_projects(json, ws)
+    log.inf(f"Parsed '{WS_JSON_PATH}'.", workspace=ws.dump())
     return ws
-
-
-# TODO: Continue improving error messages and formatting :)

@@ -1,12 +1,13 @@
 import logging
 import sys
 from functools import cache
-from json import dumps
 from typing import Any, NoReturn
 
 import structlog
-from rich.console import Console
-from rich.table import Table, box
+from rich import box, pretty
+from rich.console import Console, ConsoleRenderable
+from rich.highlighter import ReprHighlighter
+from rich.table import Table
 from rich.theme import Theme
 
 _custom_log_themes = Theme(
@@ -48,15 +49,26 @@ def _console_printer(
 
     # Format event dictionary into a Rich Table:
     if event_dict:
-        table = Table(box=box.MINIMAL, show_header=False, show_lines=True)
-        table.add_column("name", justify="right", style=level, width=11, overflow="fold")
-        table.add_column("value", style="white", width=80)
+        table = Table(box=box.ROUNDED, border_style=level, show_header=False, show_lines=True, expand=False)
+        table.add_column("name", justify="right", style=level, max_width=10)
         for key, value in event_dict.items():
-            prettified_value = str(value).strip()
-            table.add_row(key.replace("_", " "), prettified_value)
-        console.print(table)
+            key_text = key.replace("_", " ")
 
-    return console.end_capture()
+            if isinstance(value, dict):
+                prettified_value = pretty.Pretty(
+                    value,
+                    highlighter=ReprHighlighter(),
+                    indent_guides=True,
+                    expand_all=True,
+                )
+            elif isinstance(value, ConsoleRenderable):
+                prettified_value = value
+            else:
+                prettified_value = str(value).strip()
+            table.add_row(key_text, prettified_value)
+
+        console.print(table)
+    return console.end_capture().strip()
 
 
 @cache
@@ -97,8 +109,3 @@ def err(msg: str, **kwargs: Any) -> None:  # noqa: ANN401
 def fatal(msg: str, **kwargs: Any) -> NoReturn:  # noqa: ANN401
     err(msg, **kwargs)
     sys.exit(-1)
-
-
-def json_dumps(key: str, value: dict[str, Any]) -> str:
-    """This is like the regular json.dumps(), except it does not wrap the final document in curly brackets."""
-    return f'"{key}": ' + dumps(value, indent=2, default=lambda o: str(o))

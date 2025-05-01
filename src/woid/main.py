@@ -1,17 +1,14 @@
 import time
-from pathlib import Path
 from typing import Annotated
 
 import typer
 from rich.progress import Progress, SpinnerColumn, TextColumn, track
 
 from woid import log
+from woid.common import WS_JSON_PATH, set_verbose
 from woid.workspace import load_workspace
 
-APP_NAME = "woid"
-WORKSPACE_JSON_PATH = Path("woid.json")
-
-app: typer.Typer = typer.Typer(name=APP_NAME, rich_markup_mode="rich")
+app: typer.Typer = typer.Typer(name="woid", rich_markup_mode="rich")
 
 
 @app.callback(invoke_without_command=True)
@@ -29,11 +26,12 @@ def woid(
     """A workspace management tool for multi-repository projects."""
     if verbose:
         log.dbg("Enabled Verbose output.")
+        set_verbose(True)
 
     if ctx.invoked_subcommand:
         log.dbg(f"Running command `{ctx.invoked_subcommand}`.")
 
-    _workspace = load_workspace(WORKSPACE_JSON_PATH)
+    _workspace = load_workspace(WS_JSON_PATH)
 
 
 class Panels:
