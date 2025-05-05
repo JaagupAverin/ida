@@ -9,6 +9,7 @@ from rich.console import Console, ConsoleRenderable
 from rich.highlighter import ReprHighlighter
 from rich.table import Table
 from rich.theme import Theme
+from woid.common import is_verbose
 
 _custom_log_themes = Theme(
     {
@@ -91,7 +92,8 @@ def get_logger() -> structlog.types.FilteringBoundLogger:
 
 
 def dbg(msg: str, **kwargs: Any) -> None:  # noqa: ANN401
-    get_logger().debug(msg, **kwargs)
+    if is_verbose():
+        get_logger().debug(msg, **kwargs)
 
 
 def inf(msg: str, **kwargs: Any) -> None:  # noqa: ANN401

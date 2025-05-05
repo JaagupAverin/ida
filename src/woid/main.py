@@ -1,3 +1,4 @@
+from pathlib import Path
 import time
 from typing import Annotated
 
@@ -6,7 +7,7 @@ from rich.progress import Progress, SpinnerColumn, TextColumn, track
 
 from woid import log
 from woid.common import WS_JSON_PATH, set_verbose
-from woid.workspace import load_workspace
+from woid.workspace import Workspace, print_workspace_status
 
 app: typer.Typer = typer.Typer(name="woid", rich_markup_mode="rich")
 
@@ -31,7 +32,8 @@ def woid(
     if ctx.invoked_subcommand:
         log.dbg(f"Running command `{ctx.invoked_subcommand}`.")
 
-    _workspace = load_workspace(WS_JSON_PATH)
+    workspace = Workspace(Path(".") / WS_JSON_PATH)
+    print_workspace_status(workspace)
 
 
 class Panels:

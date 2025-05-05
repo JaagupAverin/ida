@@ -1,11 +1,12 @@
 from pathlib import Path
 
 WS_JSON_PATH: Path = Path("woid.json")
+PROJECTS_DIR: Path = Path("projects/")
 
 _verbose: bool = False
 
 
-def get_verbose() -> bool:
+def is_verbose() -> bool:
     return _verbose
 
 

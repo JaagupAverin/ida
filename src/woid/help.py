@@ -8,7 +8,7 @@ from rich.highlighter import ReprHighlighter
 from rich.panel import Panel
 from rich.text import Text
 
-from woid.common import WS_JSON_PATH, get_verbose
+from woid.common import WS_JSON_PATH, is_verbose
 
 
 @dataclass
@@ -31,7 +31,7 @@ def _create_help(fields: list[Field], examples: list[Example]) -> ConsoleRendera
             arg_render = Text.from_markup(f"[u]{field.name}[/u]: {field.help}\n")
             renderables.append(arg_render)
 
-        if get_verbose():
+        if is_verbose():
             for i, example in enumerate(examples):
                 prettified_value = pretty.Pretty(
                     decode(example.code),
